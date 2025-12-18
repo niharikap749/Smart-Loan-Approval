@@ -46,11 +46,3 @@ Loan Approved because the applicant has good credit history and sufficient incom
 cd src
 python3 train_model.py
 
----
-
-## STEP 2: COMMIT README
-
-```bash
-git add README.md
-git commit -m "Add project README with ML and GenAI overview"
-git push
