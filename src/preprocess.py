@@ -1,51 +1,45 @@
 import pandas as pd
-import os
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
 
 
-def preprocess_data(path):
-    """
-    Loads the dataset, cleans it, encodes features,
-    splits into train/test, and scales numeric values.
-    """
+def get_pipeline_and_data(path):
+    df = pd.read_csv(path)
 
-    # ---- FIX 1: Robust file path handling ----
-    base_dir = os.path.dirname(__file__)        # src/
-    full_path = os.path.join(base_dir, path)    # src/../data/loan_data.csv
+    # Encode target
+    df["Loan_Status"] = df["Loan_Status"].map({"Y": 1, "N": 0})
 
-    df = pd.read_csv(full_path)
+    X = df.drop("Loan_Status", axis=1)
+    y = df["Loan_Status"]
 
-    # ---- Encode target variable ----
-    df['Loan_Status'] = df['Loan_Status'].map({'Y': 1, 'N': 0})
+    categorical_cols = X.select_dtypes(include="object").columns.tolist()
+    numerical_cols = X.select_dtypes(exclude="object").columns.tolist()
 
-    # ---- Handle missing values ----
-    df.fillna({
-        'Gender': df['Gender'].mode()[0],
-        'Married': df['Married'].mode()[0],
-        'Dependents': df['Dependents'].mode()[0],
-        'LoanAmount': df['LoanAmount'].median(),
-        'Credit_History': df['Credit_History'].mode()[0]
-    }, inplace=True)
+    # ---- Numerical pipeline ----
+    num_pipeline = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="median")),
+        ("scaler", StandardScaler())
+    ])
 
-    # ---- Convert categorical features to numeric ----
-    df = pd.get_dummies(df, drop_first=True)
-    # ---- Final safety check: fill any remaining NaNs ----
-    df = df.fillna(0)
+    # ---- Categorical pipeline ----
+    cat_pipeline = Pipeline(steps=[
+        ("imputer", SimpleImputer(strategy="most_frequent")),
+        ("encoder", OneHotEncoder(handle_unknown="ignore"))
+    ])
 
+    # ---- Full preprocessor ----
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", num_pipeline, numerical_cols),
+            ("cat", cat_pipeline, categorical_cols)
+        ]
+    )
 
-    # ---- Separate features and target ----
-    X = df.drop('Loan_Status', axis=1)
-    y = df['Loan_Status']
-
-    # ---- Train-test split ----
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
 
-    # ---- Feature scaling ----
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
-
-    return X_train, X_test, y_train, y_test
+    return preprocessor, X_train, X_test, y_train, y_test
